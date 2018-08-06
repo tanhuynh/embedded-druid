@@ -6,7 +6,7 @@
 	<version>1.0</version>
 	<name>Embedded Druid</name>
 	<properties>
-		<druid.version>0.9.1</druid.version>
+		<druid.version>0.9.2</druid.version>
 		<log4j.version>1.2.16</log4j.version>
 	</properties>
 
@@ -22,16 +22,23 @@
 			<version>${druid.version}</version>
 		</dependency>
 		<dependency>
+             <groupId>io.imply</groupId>
+            <artifactId>druid-example-extension</artifactId>
+            <version>0.10.0_1-SNAPSHOT</version>
+        </dependency>
+		<dependency>
 			<groupId>log4j</groupId>
 			<artifactId>log4j</artifactId>
 			<version>${log4j.version}</version>
 		</dependency>
-		<dependency>
-                        <groupId>org.testng</groupId>
-                        <artifactId>testng</artifactId>
-                        <version>6.8.8</version>
-                        <scope>test</scope>
-                </dependency>
+		<!-- https://mvnrepository.com/artifact/junit/junit -->
+<dependency>
+    <groupId>junit</groupId>
+    <artifactId>junit</artifactId>
+    <version>4.12</version>
+    <scope>test</scope>
+</dependency>
+
 	</dependencies>
 
 	<build>

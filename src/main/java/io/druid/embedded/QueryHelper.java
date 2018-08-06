@@ -16,8 +16,13 @@
 
 package io.druid.embedded;
 
+import com.google.common.base.Supplier;
+import java.nio.ByteBuffer;
+import io.druid.collections.BlockingPool;
+import io.druid.collections.StupidPool;
 import io.druid.jackson.DefaultObjectMapper;
 import io.druid.query.DefaultQueryRunnerFactoryConglomerate;
+import io.druid.query.DruidProcessingConfig;
 import io.druid.query.Query;
 import io.druid.query.QueryRunnerFactory;
 import io.druid.query.QueryRunnerFactoryConglomerate;
@@ -26,6 +31,9 @@ import io.druid.query.groupby.GroupByQueryConfig;
 import io.druid.query.groupby.GroupByQueryEngine;
 import io.druid.query.groupby.GroupByQueryQueryToolChest;
 import io.druid.query.groupby.GroupByQueryRunnerFactory;
+import io.druid.query.groupby.strategy.GroupByStrategySelector;
+import io.druid.query.groupby.strategy.GroupByStrategyV1;
+import io.druid.query.groupby.strategy.GroupByStrategyV2;
 import io.druid.query.metadata.SegmentMetadataQueryConfig;
 import io.druid.query.metadata.SegmentMetadataQueryQueryToolChest;
 import io.druid.query.metadata.SegmentMetadataQueryRunnerFactory;
@@ -58,7 +66,7 @@ import java.util.HashMap;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.base.Supplier;
+import com.fasterxml.jackson.dataformat.smile.SmileFactory;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.Maps;
 import com.metamx.common.guava.Sequence;
@@ -162,14 +170,75 @@ public class QueryHelper {
 		ObjectMapper mapper = new DefaultObjectMapper();
 		GroupByQueryConfig config = new GroupByQueryConfig();
 		config.setMaxIntermediateRows(10000);
-
+		
 		Supplier<GroupByQueryConfig> configSupplier = Suppliers.ofInstance(config);
 		GroupByQueryEngine engine = new GroupByQueryEngine(configSupplier, Utils.getBufferPool());
+		final BlockingPool<ByteBuffer> mergeBufferPool = new BlockingPool<>(
+		        new Supplier<ByteBuffer>()
+		        {
+		          @Override
+		          public ByteBuffer get()
+		          {
+		            return ByteBuffer.allocate(10 * 1024 * 1024);
+		          }
+		        },
+		        2 // There are some tests that need to allocate two buffers (simulating two levels of merging)
+		    );
+		final StupidPool<ByteBuffer> bufferPool = new StupidPool<>(
+		        new Supplier<ByteBuffer>()
+		        {
+		          @Override
+		          public ByteBuffer get()
+		          {
+		            return ByteBuffer.allocate(10 * 1024 * 1024);
+		          }
+		        }
+		    );
 
-		GroupByQueryRunnerFactory factory =
-				new GroupByQueryRunnerFactory(engine, Utils.NOOP_QUERYWATCHER, configSupplier,
+		final GroupByStrategySelector strategySelector = new GroupByStrategySelector(
+	        configSupplier,
+	        new GroupByStrategyV1(
+	            configSupplier,
+	            engine,
+	            Utils.NOOP_QUERYWATCHER,
+	            Utils.getBufferPool()
+	        ),
+	        new GroupByStrategyV2(
+	            new DruidProcessingConfig()
+	            {
+	              @Override
+	              public String getFormatString()
+	              {
+	                return null;
+	              }
+
+	              @Override
+	              public int getNumThreads()
+	              {
+	                return 2;
+	              }
+	            },
+	            configSupplier,
+	            Utils.getBufferPool(),
+	            mergeBufferPool,
+	            new DefaultObjectMapper(new SmileFactory()),
+	            Utils.NOOP_QUERYWATCHER
+	        )
+	    );
+		
+		final GroupByQueryQueryToolChest toolChest = new GroupByQueryQueryToolChest(
+	        configSupplier,
+	        strategySelector,
+	        Utils.getBufferPool(),
+	        Utils.NoopIntervalChunkingQueryRunnerDecorator()
+	    );
+		GroupByQueryRunnerFactory factory = new GroupByQueryRunnerFactory(
+	        strategySelector,
+	        toolChest
+	    );
+				/*new GroupByQueryRunnerFactory(engine, Utils.NOOP_QUERYWATCHER, configSupplier,
 						new GroupByQueryQueryToolChest(configSupplier, mapper, engine, Utils.getBufferPool(),
-		                Utils.NoopIntervalChunkingQueryRunnerDecorator()), Utils.getBufferPool());
+		                Utils.NoopIntervalChunkingQueryRunnerDecorator()), Utils.getBufferPool());*/
 		return factory;
 	}
 

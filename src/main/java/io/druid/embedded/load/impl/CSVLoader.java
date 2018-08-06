@@ -21,10 +21,15 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.StringTokenizer;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 import io.druid.data.input.InputRow;
 import io.druid.data.input.MapBasedInputRow;
@@ -43,6 +48,7 @@ import io.druid.embedded.load.Loader;
  * where data in format "Timestamp, Page, Username, Gender, City, metric, value"
  */
 public class CSVLoader extends Loader {
+    private static final Logger LOG = LoggerFactory.getLogger(CSVLoader.class);
 
 	protected Reader reader;
 	
@@ -88,6 +94,7 @@ public class CSVLoader extends Loader {
 	}
 	
 	private class CSVReaderIterator implements Iterator<InputRow> {
+
 		String nextLine;
 		protected BufferedReader breader;
 	    	
@@ -99,6 +106,7 @@ public class CSVLoader extends Loader {
 	    	if (timestampDimension == null) {
 	    		return 1l;
 	    	} else {
+	    	    LOG.info("Timestamp: {}", new Date(Long.valueOf((String)map.get(timestampDimension))));
 	    		return (Long) Long.valueOf((String)map.get(timestampDimension));
 	    	}
 	    }
